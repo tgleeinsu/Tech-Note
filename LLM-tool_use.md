@@ -9,7 +9,7 @@
     - 외부 서비스에서 제공하는 기능 함수가 될 수도 있고, 순수 함수가 될수도 있다
         - get_weather(city) — 날씨 API를 호출하는 함수
         - calculator(expression) — 그냥 수식을 계산하는 로컬 함수
-        - jira / create_issue(repo, title, body)
+        - jira / create_issue(repo, title, body)ß
     - 외부 서비스: 깃헙, 지라, 노션
     - 도구: 외부서비스 API기능들을 사용할 수 있도록 도구로써 제공 (함수)
     - MCP: 개발자가 API문서를 보고 직접 도구 하나하나를 연결하는게 아니라, 서비스쪽에서 표준형식으로 제공하는 서버
@@ -126,3 +126,30 @@
         - stop_reason: end_turn → 최종 답변 (loop 종료)  -> API 호출 2회
         - stop_reason: tool_use → 도구 더 필요 (2번으로 돌아가 loop 반복) -> API 호출 2회 + @
     ```
+
+4. tool_result에 Model에 이전 대화를 보내는 방식
+
+    - tool_result에 담아서 보낼때 이전 대화 전체를 다시 보낸다고 했는데, 이전 대화를 마구잡이로 담아서 보내는게 아니다
+        1. user       : "서울 날씨 어때?"          (사용자 질문)
+        2. assistant  : tool_use (get_weather)     (모델의 도구 호출 요청)
+        3. user       : tool_result ("28도, 맑음") (도구 실행 결과)
+        4. assistant  : tool_use (***)     (모델의 다른 도구 호출 요청)
+        ---
+        1. user       : "서울 날씨 어때?"          (사용자 질문)
+        2. assistant  : tool_use (get_weather)     (모델의 도구 호출 요청)
+        3. user       : tool_result ("28도, 맑음") (도구 실행 결과)
+        4. assistant  : tool_use (***)     (모델의 다른 도구 호출 요청)
+        5. user       : tool_result ("대충 다른 대답") (도구 실행 결과)
+        6. assistant  : "서울은 28도로 맑아요"      (모델의 최종 답변)
+
+        이런식으로 매번 보낼때마다 이런식으로 히스토리가 누적되서 보내게 된다.
+
+    - 히스토리 누적 순서에서 2,4번 tool_use와 3,5번 tool_result는 항상 짝을 이뤄야함
+        - Model이 이 도구 써줘라고 하면 그에 대한 결과가 나와야하기 때문
+
+5. role 지정
+    - 위의 user, assistant가 role임
+    - 대략 누가 한 말인지 role을 반드시 표시 해줘야함
+        - user: 사용자 질문 & tool_result 및 도구 실행 결과
+        - assistant: 모델의 발화. tool_use 및 최종 답변
+    - 도구 결과(tool_result)는 사람이 입력한 게 아닌데도 role이 user여서 이건 그냥 외워야함
