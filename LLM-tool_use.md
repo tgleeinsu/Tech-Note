@@ -127,9 +127,9 @@
         - stop_reason: tool_use → 도구 더 필요 (2번으로 돌아가 loop 반복) -> API 호출 2회 + @
     ```
 
-4. tool_result에 Model에 이전 대화를 보내는 방식
+4. 이전 대화를 Model에 보내는 방식
 
-    - tool_result에 담아서 보낼때 이전 대화 전체를 다시 보낸다고 했는데, 이전 대화를 마구잡이로 담아서 보내는게 아니다
+    - 이전 대화를 Message 배열에 담아서 보낼때 이전 대화 전체를 다시 보낸다고 했는데, 이전 대화를 마구잡이로 담아서 보내는게 아니다
         1. user       : "서울 날씨 어때?"          (사용자 질문)
         2. assistant  : tool_use (get_weather)     (모델의 도구 호출 요청)
         3. user       : tool_result ("28도, 맑음") (도구 실행 결과)
