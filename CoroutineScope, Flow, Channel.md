@@ -1,14 +1,13 @@
-# Coroutine Flow 펀더멘털
+# CoroutineScope, Flow, Channel
 
 
-- Suspend
+- ### Suspend
     - 일시중단 함수. 실행을 일시적으로 중단했다가 나중에 재개할 수 있는 suspension point를 제공
         - 단일 값 반환. 비동기 코드를 동기처럼 순차적으로 쓰고 읽게 하는 용도
         - 함수 실행 일시중단해도 스레드 블로킹 안함. 
             - 여러 값을 시간에 걸쳐 순차처리 하는 비동기 스트림의 기반이 됨
         - 콜백 지옥 대체.
-            ```
-            kotlin
+            ```kotlin
             api.getUser { user -> 
                 api.getPosts(user) { posts ->
                     api.... { ... ->
@@ -31,8 +30,7 @@
 
     - 비동기를 동기처럼 작성, 가독성 극대화 -> 단발성 비동기 코드 실무 예시
         - 보통 여러 비동기 코드를 조합하는 용도로 많이 사용
-        ```
-        kotlin
+        ```kotlin
             fun placeOrder(userId: Ing, cardId: Long) {
                 userApi.getUser(userId) { user ->
                     cardApi.getCard(user, cardId) { card ->
@@ -52,7 +50,7 @@
             콜백이었다면 3중 중첩 + 각 콜백에서 각각 에러처리 등등..
         ```
 
-        ```
+        ```kotlin
             suspend fun loadProductPage(id: Long): ProductPage = coroutineScope {
                 val product = async { productApi.get(id) }
                 val reviews = async { reviewApi.getByProduct(id) }
@@ -72,8 +70,7 @@
         - Suspend는 suspendtion point를 제공할 뿐이지 (중단 가능한 함수) 쓴다고 무조건 중단되는건 아님
         - 중단되는 경우는 delay()나 NonBlocking IO 라이브러리 (예를들어 Retrofit)같이 중단을 지원하는 함수를 써서 실제 중단이 이루어졌을때만 스레드 중단을 함
         - 논블로킹 함수를 사용하지 않는다면 명시적으로 Dispatcher 선언하여 블로킹코드를 격리하는 방식으로 스레드 점유 해제 가능
-        ```
-        kotlin
+        ```kotlin
             // 논블로킹 지원하지 않는 라이브러리 및 함수 미사용시 스레드 점유 및 블로킹
             suspend fun bedCase(): User {
                 return jdbcTemplate.queryForObject(...)
@@ -88,7 +85,7 @@
         suspend 하나로 블로킹 코드를 논 블로킹으로 바꿔주지는 않는다
 
 ---
-- Flow
+- ### Flow
     - 여러 값 + 비동기 조합의 구독 가능한 비동기 스트림, Flow<T>
     - 시간에 걸쳐 도착하는 여러개의 값을 비동기 방식으로 순차처리하는 스트림
     - 콜백 지옥, 리스너 수동 등록 / 해제, RxJava의 Observeable 개념을 Coroutine으로 대체
@@ -140,7 +137,7 @@
         3. 디버깅 난이도 상대적으로 높고, Hot, Cold 개념 필수기 때문에 여러값 + 비동기 + 구독 수명관리에 대한 이해 없이 쓰면 비용만 늘어남
         ```
 
-- Hot, Cold
+- ### Hot, Cold
     - 스트림이 구독자를 위해 매번 새로 생기는가, 스트림은 원래 존재하고 여러 구독자가 나눠 보는가?
 
         ||Cold|Hot|
@@ -158,7 +155,7 @@
         - StateFlow에 이벤트를 담지 말 것
             - 최신값만 유지하고 중복 값은 conflate라서 이벤트 연속 발생시 유실됨. 이벤트는 SharedFlow(Replay = 0)혹은 Channel 기반으로 
 
-- Shared Flow, State Flow
+- ### Shared Flow, State Flow
     - 둘다 Hot Flow는 같고, 둘의 경계를 나누는 것은 "값을 그저 흘려보내는 역할만 하는 순수 스트림인가? 항상 최신값을 들고 있는 State Holder역할까지 같이 하는가?"에 나뉜다
     - 방출하는 것 자체에 의의를 분다면 Shared Flow (Toast, Navigation 등등), 화면에 그려질 상태가 중요하다면 State Flow
 
@@ -182,12 +179,54 @@
 
 ---
 
-- Channel
+- ### Channel
+    - 생산자 -> 소비자로 값을 넘기는 하나의 통로. 구독기반의 스트림을 형성하는 Flow와 다름
     - SharedFlow(replay=0)와 Channel 차이
+        ||SharedFlow(replay=0)|Channel|
+        |-|-|-|
+        |성격|스트림|파이프(단일소비자)|
+        |구독자 여러명|전원이 구독해 값 받음|소비자 하나한테만 감. 누가 뭘 받을지는 예측 어려움|
+        |구독자 0일때 emit|데이터 유실|버퍼에 보관 -> 나중에 소비|
+        |전달 보장|at most once|at least once|
+        - 회전등으로 구독이 잠깐 끊긴 사이 발생한 이벤트를 놓치면 안되면 Channel 권유.
+        기본적으로 유실 불가한 1회성 이벤트는 Cahnnel(BUFFERED)로 권장함
+
+    - 여러곳이 동시에 받아야하는게 아니라 한곳이 확실히 하나의 이벤트를 받아야한다면 Channel
+
+
+
 
 ---
 
-- Sequence
 
-- Coroutine Scope
+- ### Coroutine Scope
+    - 코루틴 생명주기를 묶어서 관리하는 하나의 컨테이너.
+    - Coroutine Scope안에는 각각의 Job이 있는데 부모 - 자식 - 형제간으로 연결되고 이를 통해 취소, 예외가 전파됨
+    - Scope취소되면 자식 Coroutine 전부 자동 취소. 이거때문에 구조화되어있다고 하는거임
+
     - Supervisor Scope
+        - 자식 Coroutine에서 실패하면 자식의 자식뿐 아니라 형제까지도 실패하게 되는데 이때 Supervisor Scope 사용하게 되면 형제에게는 실패 전파 안됨.
+        - 즉, Supervisor Scope의 자식 Coroutine들은 각자 독립적으로 존재하게됨.
+
+            ||Coroutine Scope (Job)|Supervisor Scope (SupervisorJob)|
+            |-|-|-|
+            |자식 실패하면|형제들 다 취소|실패한 자식만 죽고 형제는 생존|
+            |예외 전파 방향|자식 -> 부모 -> 형제|실패한 자식에서 멈추고 부모로 안감|
+            |언제사용하나|실패 자체가 전체 Coroutine Scope 실패로 봐야할 때|동일한 부모 Scope 공유중이지만 각각 독립된 작업으로 봐야할 때|
+
+            ```kotlin
+            //예를들어 화면에 컴포넌트를 복수개 띄워야하는데 각각의 실패여부와 상관없이 성공한 것들만 띄울때?
+            suspend fun foo1() {
+                ...
+                supervisorScope {
+                    loadFoo2() // 얘 실패해도
+                    loadFoo3() // 얘는 정상 로드 되야함
+                }
+            }
+            ```
+        - 좀 헷갈리는 포인트
+            1. supervisorScope는 자식 예외를 대신 처리해주지 않음
+                - 각 자식 Scope 내부에서 catch해야함. 전파를 막아줄 뿐 처리해주진 않음
+            2. viewmodelScope는 내부적으로 이미 SupervisorJob임
+                - 그래서 자식 coroutine하나가 죽어도 다른 형제격 coroutine은 안날라감.
+            3. 커스텀 Scope만들때 CoroutineScope를 쓸건지, SupervisorScope를 쓸건지가, 형제 동반 취소 여부를 가른다. 유의.
